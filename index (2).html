@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rungs: a word ladder game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --wall: #ECEFF3;
+    --ink: #131C33;
+    --ink-soft: #55607A;
+    --rail: #2247D6;
+    --on-rail: #FFFFFF;
+    --rung: #FFFFFF;
+    --rung-edge: #C5CDDA;
+    --caution: #FFC421;
+    --caution-soft: #FFE59A;
+    --caution-ink: #2A2100;
+    --stop: #B92B1B;
+    --key: #D9DFE8;
+    --key-down: #BFC8D6;
+
+    --text: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --letters: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+
+    --rail-w: 12px;
+    --rung-h: clamp(40px, 6.4vh, 54px);
+    --rung-gap: clamp(6px, 1.2vh, 10px);
+
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --wall: #0F1626;
+      --ink: #E9EDF7;
+      --ink-soft: #9AA5BF;
+      --rail: #6C8BFF;
+      --on-rail: #0F1626;
+      --rung: #1C2640;
+      --rung-edge: #36425F;
+      --caution-soft: #6B5720;
+      --stop: #FF8A7A;
+      --key: #263150;
+      --key-down: #34416A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --wall: #0F1626;
+    --ink: #E9EDF7;
+    --ink-soft: #9AA5BF;
+    --rail: #6C8BFF;
+    --on-rail: #0F1626;
+    --rung: #1C2640;
+    --rung-edge: #36425F;
+    --caution-soft: #6B5720;
+    --stop: #FF8A7A;
+    --key: #263150;
+    --key-down: #34416A;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    height: 100%;
+    margin: 0;
+    background: var(--wall);
+    color: var(--ink);
+    font-family: var(--text);
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+  }
+  button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: 3px solid var(--rail); outline-offset: 2px; }
+
+  .game {
+    height: 100%;
+    min-height: 540px;
+    max-width: 27rem;
+    margin: 0 auto;
+    padding: 14px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Header */
+  .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; }
+  .mark {
+    position: relative;
+    margin: 0;
+    padding: 0 13px;
+    font-family: var(--letters);
+    font-weight: 700;
+    font-size: 2rem;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .mark::before, .mark::after {
+    content: "";
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 6px;
+    border-radius: 2px;
+    background: var(--rail);
+  }
+  .mark::before { left: 0; }
+  .mark::after { right: 0; }
+
+  .lengths {
+    display: flex;
+    padding: 2px;
+    border: 1.5px solid var(--rung-edge);
+    border-radius: 999px;
+  }
+  .lengths button {
+    border: 0;
+    background: none;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .lengths button[aria-checked="true"] { background: var(--ink); color: var(--wall); }
+
+  .brief { margin: 0; color: var(--ink-soft); font-size: 0.95rem; }
+  .brief b {
+    font-family: var(--letters);
+    font-weight: 700;
+    font-size: 1.12em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  /* Ladder */
+  .shaft {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2px 0;
+  }
+  .ladder {
+    position: relative;
+    width: min(100%, 19rem);
+    margin-top: auto;
+    padding: 8px var(--rail-w);
+    display: flex;
+    flex-direction: column;
+    gap: var(--rung-gap);
+  }
+  .ladder::before, .ladder::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--rail-w);
+    border-radius: 4px;
+    background: var(--rail);
+  }
+  .ladder::before { left: 0; }
+  .ladder::after { right: 0; }
+
+  .rung {
+    position: relative;
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    height: var(--rung-h);
+    background: var(--rung);
+    border-block: 2px solid var(--rung-edge);
+  }
+  .cell {
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--letters);
+    font-weight: 700;
+    font-size: calc(var(--rung-h) * 0.62);
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .cell + .cell { border-left: 1px solid var(--rung-edge); }
+  .cell.match { background: var(--caution); color: var(--caution-ink); }
+
+  .rung.past .cell { color: var(--ink-soft); }
+  .rung.past .cell.match { background: var(--caution-soft); color: var(--ink); }
+  .rung.done.hinted::after { color: var(--caution-ink); }
+
+  .rung.goal { background: var(--rail); border-color: var(--rail); position: sticky; top: 0; z-index: 1; }
+  .rung.goal .cell { color: var(--on-rail); }
+  .rung.goal .cell + .cell { border-left-color: color-mix(in srgb, var(--on-rail) 28%, transparent); }
+  .rung.goal .cell.match { background: var(--caution); color: var(--caution-ink); }
+
+  .rung.ghost { background: none; border-block: 2px dashed var(--rung-edge); }
+
+  .rung.current button.cell { cursor: pointer; }
+  .rung.current .cell.sel { box-shadow: inset 0 0 0 3px var(--ink); }
+  .rung.current button.cell:focus-visible { outline-offset: -3px; }
+
+  .rung.hinted::after {
+    content: "hint";
+    position: absolute;
+    top: 1px;
+    right: 5px;
+    font-family: var(--text);
+    font-size: 0.62rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ink-soft);
+  }
+
+  .rung.fresh { animation: settle 0.22s ease-out; }
+  .rung.shake { animation: shake 0.3s ease-in-out; }
+  .rung.done .cell { animation: lock 0.42s ease-out backwards; }
+  .rung.done .cell:nth-child(2) { animation-delay: 0.09s; }
+  .rung.done .cell:nth-child(3) { animation-delay: 0.18s; }
+  .rung.done .cell:nth-child(4) { animation-delay: 0.27s; }
+  @keyframes settle { from { transform: translateY(-9px); opacity: 0; } }
+  @keyframes shake {
+    20% { transform: translateX(-6px); }
+    45% { transform: translateX(5px); }
+    70% { transform: translateX(-3px); }
+  }
+  @keyframes lock {
+    from { background: var(--rail); color: var(--on-rail); transform: scale(0.82); }
+    60% { transform: scale(1.08); }
+  }
+
+  /* Status line */
+  .status {
+    display: grid;
+    grid-template-columns: 4.4rem 1fr 4.4rem;
+    align-items: center;
+    gap: 8px;
+    min-height: 2.7rem;
+  }
+  .count { font-size: 0.85rem; color: var(--ink-soft); white-space: nowrap; }
+  .count b {
+    font-family: var(--letters);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--ink);
+    margin-right: 4px;
+  }
+  .count.par { text-align: right; }
+  .count.par b { margin: 0 0 0 4px; }
+  .count.over b { color: var(--stop); }
+  .msg { margin: 0; text-align: center; font-size: 0.92rem; line-height: 1.3; }
+  .msg.stop { color: var(--stop); }
+
+  /* Keyboard */
+  .keys { display: grid; gap: 6px; }
+  .krow { display: flex; gap: 5px; }
+  .krow.inset { padding: 0 5%; }
+  .key {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: var(--key);
+    font-weight: 600;
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .key:active { background: var(--key-down); }
+  .key.wide { flex: 1.7 1 0; font-size: 0.85rem; text-transform: none; }
+  .key:disabled { opacity: 0.45; cursor: default; }
+
+  /* Footer */
+  .tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
+  .tally dl { display: flex; gap: 14px; margin: 0; font-size: 0.85rem; color: var(--ink-soft); }
+  .tally dl div { display: flex; align-items: baseline; gap: 5px; }
+  .tally dt, .tally dd { margin: 0; white-space: nowrap; }
+  .tally dd { font-family: var(--letters); font-weight: 700; font-size: 1.2rem; line-height: 1; color: var(--ink); }
+  .new {
+    flex: none;
+    border: 1.5px solid var(--ink);
+    background: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+  }
+  .new.ready { background: var(--ink); color: var(--wall); }
+
+  @media (min-width: 30rem) and (min-height: 46rem) {
+    .game { padding-top: 28px; padding-bottom: 24px; gap: 14px; }
+    .mark { font-size: 2.4rem; }
+    .key { height: 48px; }
+  }
+  @media (max-width: 26rem) {
+    .mark { font-size: 1.75rem; }
+    .lengths button { padding: 4px 9px; }
+    .tally dl { gap: 9px; font-size: 0.8rem; }
+    .tally dl div { gap: 4px; }
+    .tally dd { font-size: 1.1rem; }
+    .new { padding: 7px 12px; font-size: 0.86rem; }
+  }
+  @media (max-width: 22.5rem) {
+    .game { padding-left: 12px; padding-right: 12px; }
+    .mark { font-size: 1.5rem; padding: 0 10px; }
+    .mark::before, .mark::after { width: 5px; }
+    .krow { gap: 4px; }
+    .tally dl { gap: 7px; }
+    .new { padding: 7px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="game">
+  <header class="top">
+    <h1 class="mark">Rungs</h1>
+    <div class="lengths" id="lengths" role="radiogroup" aria-label="Ladder length">
+      <button type="button" role="radio" data-len="short" title="Solvable in 3 steps">Short</button>
+      <button type="button" role="radio" data-len="medium" title="Solvable in 4 steps">Medium</button>
+      <button type="button" role="radio" data-len="tall" title="Solvable in 5 or 6 steps">Tall</button>
+    </div>
+  </header>
+
+  <p class="brief" id="brief"></p>
+
+  <section class="shaft" id="shaft" aria-label="Word ladder">
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <div class="status">
+    <span class="count" id="stepsWrap"><b id="steps">0</b><span id="stepsWord">steps</span></span>
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    <span class="count par">par<b id="par">4</b></span>
+  </div>
+
+  <div class="keys" id="keys" aria-label="Letters"></div>
+
+  <footer class="tally">
+    <dl>
+      <div><dt>Solved</dt><dd id="tSolved">0</dd></div>
+      <div><dt>On par</dt><dd id="tPar">0</dd></div>
+      <div><dt>Streak</dt><dd id="tStreak">0</dd></div>
+    </dl>
+    <button type="button" class="new" id="newBtn">New puzzle</button>
+  </footer>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Words ---------- */
+  const chunk = s => s.match(/.{4}/g);
+  const ALL = chunk('aahsaalsabasabbaabbeabedabetableablyabosabriabutabyeabysacedacesacheachyacidacmeacneacreactaactsacyladdsaditadosadzeaeonaeroaeryafaragaragasagedageeageragesaghaaginagioaglyagmaagogagonagueahemahoyaideaidsailsaimsainsairnairsairtairyaitsajarajeeakeeakinalaealanalaralasalbaalbsalecaleealefalesalfaalgaalifalitalkyallsallyalmaalmealmsaloealowalpsalsoaltoaltsalumamahamasamboamenamiaamidamieaminamiramisammoamokampsamusamylanasandsanesanewangaanilanisankhannaanoaanonansaantaanteantiantsapedaperapesapexapodapseaquaarakarbsarcharcoarcsareaaresarfsariaaridarilarksarmsarmyartsartyarumarvoarylasciaseaashyasksaspsatapatesatmaatomatopauksauldauntauraautoaveravesavidavosavowawayawedaweeawesawlsawnsawnyawolawryaxalaxedaxelaxesaxilaxisaxleaxonayahayesayinazanazonbaalbaasbabababebabubabybachbackbadebadsbaffbagsbahtbailbaitbakebaldbalebalkballbalmbalsbamsbandbanebangbanibankbansbapsbarbbardbarebarfbarkbarmbarnbarsbasebashbaskbassbastbatebathbatsbattbaudbawdbawlbaysbeadbeakbeambeanbearbeatbeaubeckbedsbedubeefbeenbeepbeerbeesbeetbegsbellbelsbeltbemabendbenebensbentbergbermbestbetabethbetsbevybeysbhutbiasbibbbibsbicebidebidsbierbiffbigsbikebilebilkbillbimabindbinebinsbintbiosbirdbirkbirlbirrbisebiskbitebitsbittbizeblabblaeblahblamblatblawblebbledbletblewblinblipblobblocblotblowblubblueblurboarboasboatbobsbockbodebodsbodyboffbogsbogyboilbolaboldbolebollboloboltbombbondbonebongbonkbonybookboomboonboorboosbootbopsboraborebornbortboshboskbossbotabothbotsbottboutbowlbowsboxyboyoboysbozobradbraebragbranbrasbratbrawbraybredbreebrenbrewbriebrigbrimbrinbriobrisbritbroobrosbrowbrrrbrutbubobubsbuckbudsbuffbugsbuhlbuhrbulbbulkbullbumfbumpbumsbundbungbunkbunnbunsbuntbuoyburaburdburgburlburnburpburrbursburybushbuskbussbustbusybutebutsbuttbuysbuzzbyesbyrebyrlbytecabscacacadecadicadscafecaffcagecagycaidcaincakecakycalfcalkcallcalmcalocalxcamecampcamscanecanscantcapecaphcapocapscarbcardcarecarkcarlcarncarpcarrcarscartcasacasecashcaskcastcatecatscaulcavecavycawscayscecacedecediceesceilcellcelsceltcentcepecepscerecerocesscetechadchamchaochapcharchatchawchaychefchewchezchiachicchidchinchipchischitchonchopchowchubchugchumciaocinecioncirecistcitecitycladclagclamclanclapclawclayclefclewclipclodclogclonclopclotcloyclubcluecoalcoatcoaxcobbcobscocacococodacodecodscoedcoffcoftcogscohocoifcoilcoincoircokecolacoldcolecolscoltcolycomacombcomecompconeconiconkconnconsconycoofcookcoolcoopcooscootcopecopscopycordcorecorfcorkcormcorncorycoshcosscostcosycotecotscoupcovecowlcowscowycoxacoyscozycrabcragcramcrawcrewcribcriscroccropcrowcrudcruscruxcubecubscudscuedcuescuffcuifcukecullculmcultcupscurbcurdcurecurfcurlcurncurrcurscurtcuskcuspcusscutecutscwmscyancymacymecystczardabsdacedadadadodadsdaffdaftdagsdahldahsdaisdaksdaledalsdamedampdamsdangdankdapsdarbdaredarkdarndartdashdatadatedatodaubdautdavydawkdawndawsdawtdaysdazedeaddeafdealdeandeardebsdebtdeckdecodeeddeemdeepdeerdeesdeetdefideftdefydeildekedeledelfdelidelldelsdemedemodemydenedensdentdenyderedermdeskdevadevsdewsdewydexydeysdhakdhaldhowdialdibsdicedidodidydieddieldiesdietdigsdilldimedimsdinedingdinkdinsdintdioldipsdiptdiredirkdirldirtdiscdishdiskdissditaditeditsditzdivadivedjindoatdobydockdocsdododoerdoesdoffdogedogsdogydoitdojodoledolldolsdoltdomedomsdonadonedonsdoomdoordopadopedopydoredorkdormdorpdorrdorsdorydosedossdostdotedothdotsdotydoumdourdouxdovedowndowsdoxydozedozydrabdragdramdratdrawdraydreedregdrekdrewdribdripdropdrubdrugdrumdrysduaddualdubsduceduciduckductdudedudsduelduesduetduffdugsduitdukedulldulydumadumbdumpdunedungdunkdunsduntduosdupedupsduraduredurndurodurrduskdustdutydyaddyeddyerdyesdyneeachearlearnearseaseeasteasyeatheatseauxeaveebbsebonecheechoecruecuseddoeddyedgeedgyedhsediteelseelyeeryeffseftsegadegalegereggseggyegisegoseideekedekeselaneldselhielksellselmselmyelseemesemeuemfsemicemiremitemusemydendsengsenolenowenvyeonsepeeephaepiceposerasergoergserneernseroserrserstesesespyetasetchethseticetnaetuieuroeveneverevesevilewerewesexamexecexesexitexonexpoeyaseyedeyeneyereyeseyneeyraeyreeyryfacefactfadefadofadsfailfainfairfakefallfalxfamefanefangfanofansfardfarefarlfarmfarofartfashfastfatefatsfaunfauxfavafavefawnfaysfazefealfearfeatfeckfedsfeedfeelfeesfeetfehsfellfeltfemefemsfendfensfeodferefernfessfetafetefetsfeudfeusfiarfiatfibsficeficofidofidsfieffifefigsfilafilefillfilmfilofilsfindfinefinkfinofinsfirefirmfirnfirsfiscfishfistfitsfivefixtfizzflabflagflakflamflanflapflatflawflaxflayfleafledfleeflewflexfleyflicflipflitflocfloeflogflopflowflubflueflusfluxfoalfoamfobsfocifoesfogsfogyfohnfoilfoinfoldfolkfondfonsfontfoodfoolfootfopsforaforbfordforeforkformfortfossfoulfourfowlfoxyfoysfozyfraefragfrapfratfrayfreefretfrigfritfrizfroefrogfromfrowfrugfubsfucifudsfuelfugsfugufujifullfumefumyfundfunkfunsfurlfursfuryfusefussfutzfuzefuzzfycefykegabsgabygadigadsgaedgaengaesgaffgagagagegagsgaingaitgalagalegallgalsgamagambgamegampgamsgamyganeganggaolgapegapsgapygarbgarsgashgaspgastgategatsgaudgaumgaungaurgavegawkgawpgaysgazegeargeckgedsgeedgeekgeesgeezgeldgelsgeltgemsgenegensgentgenugermgestgetagetsgeumghatgheeghisgibegibsgidsgiedgiengiesgiftgigagigsgildgillgiltginkginsgipsgirdgirlgirngirogirtgistgitsgivegladgledgleeglegglengleygliaglibglimglobglomglopglowglueglugglumglutgnargnatgnawgnusgoadgoalgoasgoatgobogobsgobygodsgoergoesgogogoldgolfgonegonggoodgoofgoongoopgoosgoregorpgorygoshgoutgowdgowkgowngoysgrabgradgramgrangratgraygreegrewgreygridgriggrimgringripgritgroggrotgrowgrubgruegrumguanguarguckgudeguffguidgulfgullgulpgulsgumsgunkgunsgurugushgustgutsguvsguysgybegymsgypsgyregyrigyrogyvehaafhaarhabuhackhadehadjhaedhaemhaenhaeshaethafthagshahahahshaikhailhairhajihajjhakehalehalfhallhalmhalohalthamehamshandhanghankhanthapshardhareharkharlharmharpharthashhasphasthatehathhatshaulhauthavehawkhawshayshazehazyheadhealheaphearheatheckheedheelhefthehsheilheirheldhelmhelohelphemehemphemshenshentherbherdhereherlhermhernherohershesthethhetshewnhewshickhidehiedhieshighhikehilahilihillhilthindhinshinthipshirehisnhisshisthitshivehoarhoaxhobohobshockhodshoedhoerhoeshogghogshokeholdholeholkholmholpholsholtholyhomehomyhonehonghonkhonshoodhoofhookhoophoothopehopshorahornhosehosthotshourhovehowehowfhowkhowlhowshoyahoyshubshuckhuedhueshuffhugehugshuichulahulkhullhumphumshunghunhhunkhunshunthurlhurthushhuskhutshwanhylahymnhypehypohypshyteiambibexibisicedicesichsickyiconideaidemidesidleidlyidolidyliffyigluikatikonileailexiliailkailksillsillyimamimidimmyimpiimpsinbyinchinfoiniainksinkyinlyinnsinrointiintoionsiotairediresiridirisirksironisbaisleismsitchitemiwisixiaizarjabsjackjadejaggjagsjailjakejambjamsjanejapejarljarsjatojaukjaupjavajawsjaysjazzjeanjeedjeepjeerjeesjeezjefejehujelljeonjerkjessjestjetejetsjeuxjewsjiaojibbjibejibsjiffjigsjilljiltjimpjinkjinnjinsjinxjivejobsjockjoesjoeyjogsjohnjoinjokejokyjolejoltjoshjossjotajotsjoukjowljowsjoysjubajubejudojugajujujukejumpjunkjupejurajuryjustjutejutskaaskabskadikaeskafskagukaifkailkainkakakakikalekamekamikanakanekaonkapakaphkarnkartkatakatskavakayokayskbarkeaskeckkeefkeekkeelkeenkeepkeetkefskegskeirkelpkempkenokenskentkepikepskeptkerbkerfkernketokeyskhafkhankhatkhetkhiskibekickkidskiefkierkifskillkilnkilokiltkinakindkinekingkinkkinokinskipskirkkirnkirskisskistkitekithkitskivakiwiknapknarkneeknewknitknobknopknotknowknurkoankoaskobokobskoelkohlkolakolokonkkookkophkopskorekorskosskotokriskudokudukueskurukvaskyakkyarkyatkytelabslacelacklacslacyladeladsladylagslaiclaidlainlairlakelakhlakylalllamalamblamelamplamslandlanelanglanklapslardlarilarklarslaselashlasslastlatelathlatilatslaudlavalavelavslawnlawslayslazelazyleadleafleaklealleanleaplearleaslechleekleerleesleetleftlegslehrleislekelekslekulendlenolenslentleptlesslestletsleudlevalevolevylewdleysliarlibslicelichlicklidolidsliedlieflienlierlieslieulifeliftlikeliltlilylimalimblimelimnlimolimplimylinelinglinklinnlinolinslintlinylionlipsliralirelirilisplistlitelitslituliveloadloafloamloanlobelobolobslocalochlocilocklocolodeloftlogelogologslogyloinlolllonelonglooflookloomloonlooplooslootlopelopslordlorelornloryloselosslostlotalothlotilotsloudlouplourloutlovelowelownlowsluaulubeluceluckludelueslufflugelugslulllululumplumslunalunelunglunkluntlunylurelurklushlustlutelutzluvsluxelweilyeslynxlyrelysemaarmabemacemachmackmacsmademadsmaesmagemagimagsmaidmailmaimmainmairmakemakomalemallmalmmaltmamamanamanemanomansmanymapsmarcmaremarkmarlmarsmartmashmaskmassmastmatemathmatsmattmaudmaulmaunmautmawnmawsmaximayamayomaysmazemazymeadmealmeanmeatmeedmeekmeetmeldmellmelsmeltmemomemsmendmenomenumeoumeowmeremerkmerlmesameshmessmetametemethmewlmewsmezemhosmibsmicamicemickmidimidsmienmiffmiggmigsmikemildmilemilkmillmilomilsmiltmimeminamindmineminiminkmintminxmiremirimirkmirsmirymisemisomissmistmitemittmitymixtmoanmoasmoatmobsmockmocsmodemodimodsmogsmoilmojomokemolamoldmolemollmolsmoltmolymomemomimomsmonkmonomonsmonymoodmoolmoonmoormoosmootmopemopsmopymoramoremornmorsmortmoskmossmostmotemothmotsmottmouemovemownmowsmoxamozomuchmuckmudsmuggmugsmulemullmummmumpmumsmumumunimunsmuonmuramuremurkmurrmusemushmuskmussmustmutemutsmuttmynamythnaannabenabsnadanagsnaifnailnamenananansnaoinaosnapenapsnarcnardnarknarynavenavynaysneapnearneatnebsneckneedneemneepneifnemaneneneonnerdnessnestnetsnettneukneumnevenevinewsnewtnextnibsnicenicknidenidinighnillnilsnimsninenipanipsnisinitenitsnixenixynobsnocknodenodinodsnoelnoesnoggnogsnoilnoirnolonomanomenomsnonanonenooknoonnopenorinormnosenoshnosynotanotenounnousnovanowsnowtnubsnudenukenullnumbnunsnurdnurlnutsoafsoaksoarsoastoathoatsobesobeyobiaobisobitoboeobolocasoddsodeaodesodicodorodylofayoffsogamogeeogleogreohedohiaohmsoilsoilyoinkokasokayokehokesokraoldsoldyoleaoleoolesolioollaomenomeromitonceonesonlyontoonusonyxoohsoopsootsoozeoozyopahopalopedopenopesoptsopusoradoralorbsorbyorcaorcsordooresorleorraortsoryxorzoosarosesossaoticottoouchoudsouphoursoustoutsouzoovalovenoverovumowedowesowlsownsowseoxenoxesoxidoximoyeroyesoyezpacapacepackpacspactpadipadspagepaidpaikpailpainpairpalepallpalmpalppalspalypamspanepangpanspantpapapapsparapardpareparkparrparspartpasepashpasspastpatepathpatspatypavepawlpawnpawspayspeagpeakpealpeanpearpeaspeatpechpeckpecspedspeedpeekpeelpeenpeeppeerpeespegspehspeinpekepelepelfpeltpendpenspentpeonpepopepsperiperkpermpertpesopestpetspewspfftpfuiphatphewphisphizphonphotphutpialpianpiaspicapicepickpicspiedpierpiespigspikapikepikipilepilipillpilypimapimppinapinepingpinkpinspintpinypionpipepipspipypirnpishpisopitapithpitspitypixyplanplatplaypleaplebpledplewplieplodplopplotplowployplugplumpluspockpocopodspoempoetpogypoispokepokypolepollpolopolspolypomepomppomspondponepongponsponypoodpoohpoolpoonpoorpopepopsporeporkportposeposhpostposypotspoufpourpoutpowsprampraopratpraupraypreeprepprexpreyprezprigprimproaprodprofprogprompropprosprowpsispsstpubspucepuckpudspuffpughpugspujapukepulapulepulipullpulppulspumapumppunapungpunkpunspuntpunypupapupspurepuripurlpurrpurspushputsputtputzpyaspyespyicpyinpyreqaidqatsqophquadquagquaiquayqueyquidquinquipquitquizquodracerackracyradsraffraftragarageragiragsraiaraidrailrainrajarakerakiraleramirampramsrandrangranirankrantrapsraptrareraserashraspraterathratoratsraverawsrayaraysrazerazzreadrealreamreaprearrebsreckrecsreddrederedoredsreedreefreekreelreesrefsreftregsreifreinreisrelyremsrendrentreporepprepsreshrestreteretsrevsrhearhosrhusrialriasribsricerichrickrideridsrielriferiffrifsriftrigsrilerillrimerimsrimyrindringrinkrinsriotriperipsriseriskriteritzriveroadroamroanroarroberobsrockrocsroderodsroesroilrolerolfrollrompromsroodroofrookroomrootroperopyroserosyrotaroterotirotlrotorotsrouerouproutrouxroverowsruberubsrubyruckruddruderuedruerruesruffrugarugsruinrulerulyrumprumsrunerungrunsruntruserushruskrustruthrutsryasryesrykeryndryotsabesabssacksacssadesadisafesagasagesagosagssagysaidsailsainsakesakisalesallsalpsalssaltsamesampsandsanesangsanksanssapssardsarisarksashsasssatesatisaulsavesawnsawssaysscabscadscagscamscanscarscatscopscotscowscryscudscupscutsealseamsearseasseatsecssectseedseekseelseemseenseepseerseessegosegsseifseisselfsellselssemesemisendsenesentseptserasereserfserssetasetssettsewnsewssexyshadshagshahshamshatshawshaysheashedshesshewshimshinshipshivshmoshodshoeshogshooshopshotshowshrishulshunshutsialsibbsibssicesicksicssidesiftsighsignsikesildsilksillsilosiltsimasimpsimssinesingsinhsinksinssipesipssiresirssitesithsitssizesizyskagskasskatskeeskegskepskewskidskimskinskipskisskitskuaslabslagslamslapslatslawslaysledslewslidslimslipslitslobsloeslogslopslotslowslubslueslugslumslursmewsmitsmogsmugsnagsnapsnawsnedsnibsnipsnitsnobsnogsnotsnowsnubsnugsnyesoaksoapsoarsobssocksodasodssofasoftsoilsojasokesolasoldsolesolisolosolssomasomesonesongsonssooksoonsootsophsopssorasorbsordsoresorisornsortsothsotssouksoulsoupsoursoussownsowssoyasoysspaespansparspasspatspayspazspecspedspewspikspinspitspivspotspryspudspuespunspursrisstabstagstarstatstawstaystemstepstetstewsteystirstoastobstopstowstubstudstumstunstyesubasubssuchsucksuddsudssuedsuersuessuetsughsuitsulksulusumosumpsumssungsunksunnsunssupesupssuqssurasurdsuresurfsussswabswagswamswanswapswatswayswigswimswobswopswotswumsybosycesykesylisyncsynesyphtabstabutacetachtacktacotacttadstaeltagstahrtailtaintakataketalatalctaletalitalktalltametamptamstangtanktanstaostapatapetapstaretarntarotarptarstarttasktasstatetatstaustauttavstawstaxataxiteaktealteamtearteasteattedsteedteelteemteenteestefftegstelateletelltelstemptendtenstenttepatermterntesttethtetstewstextthaethanthatthawtheethemthenthewtheythinthiothirthisthouthrothruthudthugthustickticstidetidytiedtiertiestifftiketikitiletilltilstilttimetinetingtinstinttinytipitipstiretirltirotititivytoadtobytodstodytoeatoedtoestofftofttofutogatogstoiltoittoketolatoldtoletolltolutombtometomstonetongtonstonytooktooltoomtoontoottopetophtopitopstoratorctoretoritorntorotorrtorstorttorytoshtosstosttotetotstourtouttowntowstowytoyotoystradtramtraptraytreetreftrektrettreytrigtrimtriotriptrodtroptrottrowtroytruetrugtsartskstubatubetubstucktufatufftufttugstuistuletumptunatunetungtunstupsturfturkturntushtusktutstututwaetwastweetwigtwintwittwostyeetyertyestyketynetypetypotypptypytyretyrotzarudosughsuglyukesulanulnaulusulvaumboumpsunaiunauunbeunciuncoundeundoundyunituntoupasupbyupdouponurbsurdsureaurgeuricurnsursaurususeduserusesutasuveavacsvagivailvainvairvalevampvanevangvansvaravarsvaryvasavasevastvatsvatuvausvavsvawsvealveepveerveesveilveinvelaveldvenavendventveraverbvertveryvestvetovetsvextvialvibevicevideviedvierviesviewvigavigsvilevillvimsvinavinevinovinyviolvirlvisavisevitavivavivevoesvoidvolevoltvotevowsvrowvuggvughvugswabswackwadewadiwadswadywaeswaffwaftwagewagswaifwailwainwairwaitwakewalewalkwallwalywamewandwanewanswantwanywapswardwarewarkwarmwarnwarpwarswartwarywashwaspwastwatswattwaukwaulwaurwavewavywawlwawswaxywaysweakwealweanwearwebswedsweedweekweelweenweepweerweesweetweftweirwekaweldwellweltwendwenswentweptwerewertwestwetswhamwhapwhatwheewhenwhetwhewwheywhidwhigwhimwhinwhipwhirwhitwhizwhoawhomwhopwhyswichwickwidewifewigswildwilewillwiltwilywimpwindwinewingwinkwinowinswinywipewirewirywisewishwispwisswistwitewithwitswivewoadwoeswokewokswoldwolfwombwonkwonswontwoodwoofwoolwooswordworeworkwormwornwortwostwotswovewowswrapwrenwritwusswychwyeswylewyndwynnwynswytexystyackyaffyagiyaksyaldyamsyangyankyapsyardyareyarnyaudyaupyawlyawnyawpyawsyaysyeahyeanyearyeasyechyeggyeldyelkyellyelpyensyerkyetiyettyeukyewsyidsyillyinsyipeyipsyirdyirrylemyobsyockyodhyodsyogayoghyogiyokeyoksyolkyondyoniyoreyouryoweyowlyowsyuanyucayuchyuckyugayuksyuleyupsyurtywiszagszanyzapszarfzealzebuzedszeeszeinzekszerkzerozestzetazigszillzinczingzinszipszitizitszoeazoiczonezonkzoomzoonzooszorizyme');        // every word the game accepts
+  const COMMON = chunk('thatthiswithfromyourhavemorewillhomepagefreetimetheysitewhatnewsonlywhenherealsohelpviewbeenweresomelikethanfinddatebacklistnamejustoveryearintonextusedworklastmostdatamakethempostcitysuchbestthengoodwellhigheachverybookreadneedmanyusersaiddoesmailfulllifeknowdayspartrealitemmustmadelinesendtypetakeareawantlongcodeshowevenmuchsignfilelinkopencasesamebothgamecaredownsizeshoptextrateformlovemaincallsavecardjobsfoodsaleroomjoinwestlookleftteamweeknoteliveplancosttestcomecartplaylessparksidegivesellbodyeastclubroadgifthardfourblueeasystarhandkeepbabytermfilmheadcellselfawayoncesurecarstellablegoldartspastfiveuponsayslanddoneeverwordbilltalkkidstrueelsemarkrocktipsplusautoeditfastfactunitmeetfeelbankrisktowngirltoysgolfloanwidesorthalfstepnonelakefirechatlossfacebasenearstayturnmeankingcopycashseenportstopsoonheldmindlosttourmenuhopewishrolecamefinehourbushhugekindmovelogonicesentbandleadwentmodefundmaletooksonglatefallideatoolhillmapsdealholdsafefeedhallshippaidhairtreethuswallwinevotewaysruletoldfeetdoorcoolusespassfeesskinringboysdeeprestpoolfishpackbornracedebtcoresetswoodrentdarkhostfairgetstrippooreyesfarmlordheargoeswifehitszonejackflatflowpathlawsskipdietarmygearlotsfirmjumpballgoalsoldwindpalmpainfordedgerootpinkshotcoldfootmassheatwildmisstasksoftfuelwalkwaitrosepickloadtagsguysdroprichseemhiregaveonesrankinchsnowcampfillgonefortgenediscboaticonendscastfeltsoulflagatomironvoiddiskdeskvicedutybeargainlackknewzoomblowclipwiretapeacidcentnullzerorollbathfontbetafailjazzbagswearrarebarsdualrisebirdladyfansseatbidstollcapeminewhommathdogsmoonfearwarskeptbeatarmshideslowninespotgrowrainontobassholepetsridepairrunsyeahpeaksaltbelllaneagesplugcookbikeloseseekkitssoilexitkeyswaveholyactsmeshdeanpollbondjeanvisapurelensdrawwarmcrewlegsrearnodelockmilebowltanknavydishslotgraydemoriceloopvarymilkbootpushdearbeerearntwinbitssuitchipechogridpullplotpumpexambedsgreyboldscanagedbulkcuteseedpeermeatbangbonebugsgatetonebusyneckwingtinyrailtubebeltluckdialgangcakecafetillshoesandsealliespipedeckthinsickdoseletscatsfolkokayliftmallfellyardpourdustaddswardroofkissrushyogalampgladwinsrackbosssolotallwakedrumeasepinetendgulfhuntmillburnlabssolelaidclayweakwiseoddssonsleafsilkwolffitskickmealhurtslipcutscapspillmintspinwashaimssoapaxisheropunkdukepacewagedawncoatdollreedmicevastwrapmoodquizbeamtopsshutmaskcoallionbeefhatssurfhookcordcropsingtonshanghoodfameeggsrubystemdrewtunecornputsgrewtrektiesjurytaillawnsoupbytenosetrimquitlungseesbullmarttalecoinfakecurearchharmdeerovennoonmatechefisleslimtieddaleoilspaysfoldpolebendmomsglenlipspondtiredragriperelynutsnailspanjokepadsinnscupsfoampoemasksbeanbiasswimloudratspraypopejeepbarehungtilekneeduckdiveraidvoltdirtgeeksinkgripwattpinspolohornfroglogssnapswapflipbuzzboomcalmforktraysagecavewooleyedgraboopstrapfooldiesjaillaceuglyrowsgodsearsfistmeretaxiworndenytriocuberugsfateovaltierearlcitemessropedumphosepubsmildclanmesahullshedmemotidefunkreelbindbuckacrelowsaquapestreefsofatenthackdarehawklambjunkpoetepicsakeleandudealtogorecultdashcagepingfluxrageraysacneundohalodoombitemythweeddicequaddockhintbuysporkbarnfarebaldmolddameherbidlecoveflexhashlazycarbpenswormdeafmatsmimekeenpeasownszincgurulevygradpalegapstearnestgaleidolmosscorkdomeheelfeatglowoaksnormjadefoulseasposegoatsailbolturgeneonourslonecopelimespasjetsyarnknitpikebent');  // familiar words, used for starts, goals and hints
+  const ALLSET = new Set(ALL);
+  const COMMONSET = new Set(COMMON);
+
+  function buildIndex(words) {
+    const m = new Map();
+    for (const w of words) {
+      for (let i = 0; i < 4; i++) {
+        const k = w.slice(0, i) + '_' + w.slice(i + 1);
+        let a = m.get(k);
+        if (!a) m.set(k, a = []);
+        a.push(w);
+      }
+    }
+    return m;
+  }
+  const IDX_ALL = buildIndex(ALL);
+  const IDX_COMMON = buildIndex(COMMON);
+
+  function neighbours(idx, w) {
+    const out = [];
+    for (let i = 0; i < 4; i++) {
+      const a = idx.get(w.slice(0, i) + '_' + w.slice(i + 1));
+      if (a) for (const x of a) if (x !== w) out.push(x);
+    }
+    return out;
+  }
+  function distances(idx, from) {
+    const d = new Map([[from, 0]]);
+    const q = [from];
+    for (let h = 0; h < q.length; h++) {
+      const w = q[h], n = d.get(w) + 1;
+      for (const x of neighbours(idx, w)) if (!d.has(x)) { d.set(x, n); q.push(x); }
+    }
+    return d;
+  }
+  const differing = (a, b) => [0, 1, 2, 3].filter(i => a[i] !== b[i]);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const up = w => w.toUpperCase();
+
+  /* ---------- Puzzle making ---------- */
+  const PARS = { short: [3], medium: [4], tall: [5, 6] };
+  const used = new Set();
+
+  function makePuzzle(length) {
+    const pars = PARS[length] || PARS.medium;
+    for (let tries = 0; tries < 300; tries++) {
+      const start = pick(COMMON);
+      if (used.has(start)) continue;
+      const dAll = distances(IDX_ALL, start);
+      const dCom = distances(IDX_COMMON, start);
+      const goals = COMMON.filter(t => {
+        const p = dAll.get(t), c = dCom.get(t);
+        return pars.includes(p) && c === p &&
+               differing(start, t).length >= 3 && !used.has(t);
+      });
+      if (!goals.length) continue;
+      const target = pick(goals);
+      used.add(start); used.add(target);
+      if (used.size > 400) used.clear();
+      return { start, target, par: dAll.get(target) };
+    }
+    return { start: 'cold', target: 'warm', par: 4 };
+  }
+
+  /* ---------- Saved tally ---------- */
+  const KEY = 'rungs.v1';
+  const T = { solved: 0, onPar: 0, streak: 0 };
+  let savedLength = 'medium';
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (o && typeof o === 'object') {
+      for (const k of Object.keys(T)) if (Number.isFinite(o[k]) && o[k] >= 0) T[k] = Math.floor(o[k]);
+      if (PARS[o.length]) savedLength = o.length;
+    }
+  } catch (e) { /* storage unavailable: play without saved tally */ }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ ...T, length: S.length })); } catch (e) {}
+  }
+
+  /* ---------- State ---------- */
+  const S = {
+    length: savedLength, start: '', target: '', par: 0,
+    words: [], hinted: [], penalty: 0, sel: 0, solved: false,
+    toGoalAll: null, toGoalCommon: null
+  };
+  const current = () => S.words[S.words.length - 1];
+  const stepCount = () => S.words.length - 1 + S.penalty;
+
+  const $ = id => document.getElementById(id);
+  const ladderEl = $('ladder'), shaftEl = $('shaft'), msgEl = $('msg'), newBtn = $('newBtn');
+
+  function say(text, stop) {
+    msgEl.textContent = text;
+    msgEl.classList.toggle('stop', !!stop);
+  }
+
+  function newPuzzle() {
+    if (!S.solved && S.words.length > 1) { T.streak = 0; }
+    const p = makePuzzle(S.length);
+    S.start = p.start; S.target = p.target; S.par = p.par;
+    S.words = [p.start]; S.hinted = [false]; S.penalty = 0; S.solved = false;
+    S.sel = differing(p.start, p.target)[0] || 0;
+    S.toGoalAll = distances(IDX_ALL, p.target);
+    S.toGoalCommon = distances(IDX_COMMON, p.target);
+    save();
+    $('brief').innerHTML = '';
+    $('brief').append(
+      'Turn ', bold(p.start), ' into ', bold(p.target),
+      ', one letter per rung. Every rung must be a real word.'
+    );
+    say('Tap a letter, then pick its replacement.');
+    fit();
+    render();
+  }
+  function bold(w) { const b = document.createElement('b'); b.textContent = w; return b; }
+
+  /* ---------- Rendering ---------- */
+  function rung(word, kind, opts = {}) {
+    const el = document.createElement('div');
+    el.className = 'rung ' + kind;
+    if (kind === 'ghost') { el.setAttribute('aria-hidden', 'true'); return el; }
+    if (opts.hinted) el.classList.add('hinted');
+    const live = kind === 'current';
+    const matchAgainst = kind.startsWith('goal') ? current() : S.target;
+    el.setAttribute('aria-label',
+      (kind.startsWith('goal') ? 'Goal: ' : live ? 'Current word: ' : 'Rung: ') + up(word));
+    for (let i = 0; i < 4; i++) {
+      const c = document.createElement(live ? 'button' : 'span');
+      c.className = 'cell';
+      c.textContent = word[i];
+      if (word[i] === matchAgainst[i]) c.classList.add('match');
+      if (live) {
+        c.type = 'button';
+        c.dataset.i = i;
+        c.setAttribute('aria-label', 'Letter ' + (i + 1) + ', ' + up(word[i]));
+      }
+      el.append(c);
+    }
+    return el;
+  }
+
+  function render(fresh) {
+    const moves = S.words.length - 1;
+    const rows = [];
+    if (!S.solved) {
+      rows.push(rung(S.target, 'goal'));
+      for (let g = Math.max(0, S.par - 1 - moves); g > 0; g--) rows.push(rung('', 'ghost'));
+    }
+    for (let i = moves; i >= 0; i--) {
+      const top = i === moves;
+      const kind = top ? (S.solved ? 'goal done' : 'current') : 'past';
+      const el = rung(S.words[i], kind, { hinted: S.hinted[i] });
+      if (top && fresh) el.classList.add('fresh');
+      rows.push(el);
+    }
+    ladderEl.replaceChildren(...rows);
+    paintSelection();
+
+    const steps = stepCount();
+    $('steps').textContent = steps;
+    $('stepsWord').textContent = steps === 1 ? 'step' : 'steps';
+    $('stepsWrap').classList.toggle('over', steps > S.par);
+    $('par').textContent = S.par;
+    $('tSolved').textContent = T.solved;
+    $('tPar').textContent = T.onPar;
+    $('tStreak').textContent = T.streak;
+    newBtn.classList.toggle('ready', S.solved);
+    for (const b of document.querySelectorAll('.key')) b.disabled = S.solved;
+    for (const b of document.querySelectorAll('#lengths button')) {
+      const on = b.dataset.len === S.length;
+      b.setAttribute('aria-checked', on);
+    }
+
+    // keep the working rung in view when the ladder outgrows its space
+    const cur = ladderEl.querySelector('.current, .done');
+    if (cur) {
+      const r = cur.getBoundingClientRect(), s = shaftEl.getBoundingClientRect();
+      const roof = s.top + (S.solved ? 0 : r.height + 8);  // the goal rung stays pinned at the top
+      if (r.top < roof) shaftEl.scrollTop -= roof - r.top;
+      else if (r.bottom > s.bottom) shaftEl.scrollTop += r.bottom - s.bottom + 8;
+    }
+  }
+
+  // size the rungs so the whole par-length ladder fits the space, goal included
+  function fit() {
+    const rows = S.par + 1;
+    const cs = getComputedStyle(ladderEl);
+    const gap = parseFloat(cs.rowGap) || 8;
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const room = shaftEl.clientHeight - pad - gap * (rows - 1) - 6;
+    const h = Math.max(34, Math.min(54, Math.floor(room / rows)));
+    ladderEl.style.setProperty('--rung-h', h + 'px');
+  }
+
+  function paintSelection() {
+    for (const c of ladderEl.querySelectorAll('.current .cell')) {
+      const on = Number(c.dataset.i) === S.sel;
+      c.classList.toggle('sel', on);
+      c.setAttribute('aria-pressed', on);
+    }
+  }
+
+  function shake() {
+    const el = ladderEl.querySelector('.current');
+    if (!el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  }
+
+  /* ---------- Moves ---------- */
+  function place(word, hinted) {
+    S.words.push(word);
+    S.hinted.push(!!hinted);
+    if (hinted) S.penalty += 1;
+
+    if (word === S.target) {
+      S.solved = true;
+      const steps = stepCount(), over = steps - S.par;
+      T.solved += 1; T.streak += 1;
+      if (over === 0) T.onPar += 1;
+      save();
+      say('Solved in ' + steps + ' steps, ' +
+          (over === 0 ? 'right on par.' : over + ' over par.'));
+      render(true);
+      newBtn.focus({ preventScroll: true });
+      return;
+    }
+    const diff = differing(word, S.target);
+    if (!diff.includes(S.sel)) S.sel = diff[0];
+    if (hinted) say('Hint played ' + up(word) + '. It cost one extra step.');
+    else say('');
+    render(true);
+  }
+
+  function typeLetter(ch) {
+    if (S.solved) return;
+    const cur = current(), i = S.sel;
+    if (cur[i] === ch) { say('That spot is already ' + up(ch) + '.'); return; }
+    const next = cur.slice(0, i) + ch + cur.slice(i + 1);
+    if (!ALLSET.has(next)) {
+      say(up(next) + ' isn’t a word. Try another letter.', true);
+      shake();
+      return;
+    }
+    place(next, false);
+  }
+
+  function undo() {
+    if (S.solved) return;
+    if (S.words.length < 2) { say('Nothing to take back yet.'); return; }
+    const gone = S.words.pop();
+    S.hinted.pop();
+    const diff = differing(current(), S.target);
+    if (!diff.includes(S.sel)) S.sel = diff[0];
+    say('Took back ' + up(gone) + '.');
+    render();
+  }
+
+  function hint() {
+    if (S.solved) return;
+    const cur = current();
+    const dA = S.toGoalAll, dC = S.toGoalCommon;
+    let next;
+    if (dC.has(cur) && dC.get(cur) === dA.get(cur)) {
+      next = neighbours(IDX_COMMON, cur).find(w => dC.get(w) === dC.get(cur) - 1);
+    }
+    if (!next) {
+      const closer = neighbours(IDX_ALL, cur).filter(w => dA.get(w) === dA.get(cur) - 1);
+      next = closer.find(w => COMMONSET.has(w)) || closer[0];
+    }
+    if (next) place(next, true);
+  }
+
+  function select(i) {
+    if (S.solved) return;
+    S.sel = (i + 4) % 4;
+    paintSelection();
+  }
+
+  /* ---------- Controls ---------- */
+  const keysEl = $('keys');
+  [['qwertyuiop', ''], ['asdfghjkl', 'inset'], ['zxcvbnm', '']].forEach(([letters, cls], r) => {
+    const row = document.createElement('div');
+    row.className = 'krow ' + cls;
+    const add = (label, act, wide, title) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'key' + (wide ? ' wide' : '');
+      b.textContent = label;
+      b.dataset.act = act;
+      if (title) b.title = title;
+      row.append(b);
+    };
+    if (r === 2) add('Undo', 'undo', true, 'Take back the last rung');
+    for (const ch of letters) add(ch, ch, false);
+    if (r === 2) add('Hint', 'hint', true, 'Plays the next word and costs one extra step');
+    keysEl.append(row);
+  });
+
+  keysEl.addEventListener('click', e => {
+    const b = e.target.closest('.key');
+    if (!b) return;
+    const a = b.dataset.act;
+    if (a === 'undo') undo();
+    else if (a === 'hint') hint();
+    else typeLetter(a);
+  });
+
+  ladderEl.addEventListener('click', e => {
+    const c = e.target.closest('.current .cell');
+    if (c) select(Number(c.dataset.i));
+  });
+
+  $('lengths').addEventListener('click', e => {
+    const b = e.target.closest('button[data-len]');
+    if (!b || b.dataset.len === S.length) return;
+    S.length = b.dataset.len;
+    newPuzzle();
+  });
+
+  newBtn.addEventListener('click', () => { newPuzzle(); newBtn.blur(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (/^[a-zA-Z]$/.test(k)) { typeLetter(k.toLowerCase()); e.preventDefault(); }
+    else if (k === 'ArrowLeft') { select(S.sel - 1); e.preventDefault(); }
+    else if (k === 'ArrowRight') { select(S.sel + 1); e.preventDefault(); }
+    else if (k === 'Backspace') { undo(); e.preventDefault(); }
+    else if (k === 'Enter' && S.solved && !e.target.closest('button')) { newPuzzle(); }
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { fit(); render(); }, 120);
+  });
+
+  newPuzzle();
+})();
+</script>
+</body>
+</html>
