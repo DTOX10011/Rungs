@@ -2,7 +2,7 @@
 
 A word ladder game. Turn one four-letter word into another by changing a single letter per rung, where every rung has to be a real word.
 
-**Play it:** https://YOUR-USERNAME.github.io/rungs/
+**Play it:** https://dtox10011.github.io/Rungs/
 
 ## How to play
 
